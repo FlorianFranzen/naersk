@@ -59,6 +59,7 @@ it is converted to an attribute set equivalent to `{ root = theArg; }`.
 | `cargoDocCommands` | The commands to run in the `docPhase`. Do not forget to set `doDoc`. The argument must be a function modifying the default value. <br/> Default: `[ ''cargo $cargo_options doc $cargo_doc_options'' ]` |
 | `cargoDocOptions` | Options passed to cargo doc, i.e. `cargo doc <OPTS>`. These options can be accessed during the build through the environment variable `cargo_doc_options`. <br/> Note: these values are not (shell) escaped, meaning that you can use environment variables but must be careful when introducing e.g. spaces. <br/> The argument must be a function modifying the default value. <br/> Default: `[ "--offline" "$cargo_release" ''-j "$NIX_BUILD_CORES"'' ]` |
 | `release` | When true, all cargo builds are run with `--release`. The environment variable `cargo_release` is set to `--release` iff this option is set. Default: `true` |
+| `membersFilter` | Filter applied to workspace members list to exclude certain crates from build process. Default: `(x: true)` |
 | `override` | An override for all derivations involved in the build. Default: `(x: x)` |
 | `overrideMain` | An override for the top-level (last, main) derivation. If both `override` and `overrideMain` are specified, _both_ will be applied to the top-level derivation. Default: `(x: x)` |
 | `singleStep` | When true, no intermediary (dependency-only) build is run. Enabling `singleStep` greatly reduces the incrementality of the builds. Default: `false` |

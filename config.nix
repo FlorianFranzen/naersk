@@ -89,6 +89,9 @@ let
     cargoDocOptions =
       allowFun attrs0 "cargoDocOptions" [ "--offline" "$cargo_release" ''-j "$NIX_BUILD_CORES"'' ];
 
+    # Filter applied to list of workspace members, does not filter by default. 
+    membersFilter = attrs0.membersFilter or (x: true);
+
     # When true, all cargo builds are run with `--release`. The environment
     # variable `cargo_release` is set to `--release` iff this option is set.
     release = attrs0.release or true;
@@ -301,7 +304,7 @@ let
 
         # this turns members like "foo/*" into [ "foo/bar" "foo/baz" ]
         # as in https://github.com/rust-analyzer/rust-analyzer/blob/b2ed130ffd9c79de26249a1dfb2a8312d6af12b3/Cargo.toml#L2
-        expandMember = member:
+        membersExpand = member:
           if (lib.hasSuffix "/*" member) || (lib.hasSuffix "/*/" member)
           then
             let
@@ -316,8 +319,9 @@ let
             in map (subdir: "${rootDir}/${subdir}") subdirs
           else [ member ];
 
+        expandedMembers = lib.unique (lib.concatMap membersExpand listedMembers);
       in
-        lib.unique (lib.concatMap expandMember listedMembers);
+        lib.filter attrs.membersFilter expandedMembers;
 
     # If `copySourcesFrom` is set, then it looks like the benefits brought by
     # two-step caching break, for unclear reasons as of now. As such, do not set
@@ -346,7 +350,18 @@ let
     isWorkspace = builtins.hasAttr "workspace" toplevelCargotoml;
 
     # The top level Cargo.toml, either a workspace or package
-    toplevelCargotoml = readTOML (root + "/Cargo.toml");
+    toplevelCargotoml = let
+      original = readTOML (root + "/Cargo.toml");
+
+      workspace = original.workspace or {};
+
+      members = workspace.members or [];
+
+    in if members == [] 
+       then original
+       else lib.recursiveUpdate original {
+          workspace.members = lib.filter attrs.membersFilter members;  
+       };
 
     # The cargo lock
     cargolock = 
