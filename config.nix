@@ -1,4 +1,4 @@
-{ lib, libb, builtinz, arg }:
+{ lib, libb, builtinz, arg, runCommand, cargo }:
 let
   allowFun = attrs0: attrName: default:
     if builtins.hasAttr attrName attrs0 then
@@ -211,6 +211,10 @@ let
   usePureFromTOML = attrs.usePureFromTOML;
   readTOML = builtinz.readTOML usePureFromTOML;
 
+  # Extracts workspace member path from `name v0 (path+file://<path>)`
+  parseWorkspacePath = member:
+    builtins.head (builtins.match ".*\\(path\\+file://(.*)\\)" member);
+
   # config used during build the prebuild and the final build
   buildConfig = {
     inherit (attrs)
@@ -276,31 +280,24 @@ let
       in
         lib.filterAttrs pred cargotomls;
 
+    # Loads Cargo.toml of workspace entry in cargo metadata
+    readWorkspaceTOML = root: member: 
+      let
+        abs_path = parseWorkspacePath member;
+        tmp_path = lib.removePrefix "${root}" abs_path;
+        rel_path = if tmp_path == "" then "." else lib.removePrefix "/" tmp_path;
+      in {
+        name = rel_path;
+        value = readTOML "${abs_path}/Cargo.toml";
+      };
+
     # All cargotomls, from path to nix object
     # (attrset from directory name to Nix object)
-    cargotomls =
-      let
-        readTOML = builtinz.readTOML usePureFromTOML;
-      in
-        { "." = toplevelCargotoml; } // lib.optionalAttrs isWorkspace
-          (
-            lib.listToAttrs
-              (
-                map
-                  (
-                    member:
-                      {
-                        name = member;
-                        value = readTOML (root + "/${member}/Cargo.toml");
-                      }
-                  )
-                  members
-              )
-          );
+    cargotomls = { "." = toplevelCargotoml; } // lib.optionalAttrs isWorkspace workspacetomls;
 
-    # The cargo members
-    members =
-      let
+    workspacetomls = if toplevelCargoMetadata ? workspace_members then
+        with toplevelCargoMetadata; lib.listToAttrs (map (readWorkspaceTOML workspace_root) workspace_members)
+      else let 
         # the members, as listed in the virtual manifest
         listedMembers = toplevelCargotoml.workspace.members or [];
 
@@ -321,8 +318,12 @@ let
             in map (subdir: "${rootDir}/${subdir}") subdirs
           else [ member ];
 
-      in
-        lib.unique (lib.concatMap expandMember listedMembers);
+    in lib.genAttrs 
+      (lib.unique (lib.concatMap expandMember listedMembers))
+      (member: { 
+        name = member;
+        value = readTOML (root + "/${member}/Cargo.toml");
+      });
 
     # If `copySourcesFrom` is set, then it looks like the benefits brought by
     # two-step caching break, for unclear reasons as of now. As such, do not set
@@ -352,6 +353,10 @@ let
 
     # The top level Cargo.toml, either a workspace or package
     toplevelCargotoml = readTOML (root + "/Cargo.toml");
+
+    toplevelCargoMetadata = builtinz.readJSON (runCommand "metadata.json"  {} ''
+      ${cargo}/bin/cargo metadata --format-version 1 --no-deps --manifest-path ${root}/Cargo.toml > $out
+    '');  
 
     # The cargo lock
     cargolock = readTOML (root + "/Cargo.lock");

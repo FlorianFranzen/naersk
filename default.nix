@@ -20,7 +20,7 @@ let
     { inherit lib writeText remarshal runCommand; };
 
   mkConfig = arg:
-    import ./config.nix { inherit lib arg libb builtinz; };
+    import ./config.nix { inherit lib arg libb builtinz runCommand cargo; };
 
   buildPackage = arg:
     let

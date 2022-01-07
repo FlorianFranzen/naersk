@@ -35,6 +35,8 @@ rec
 
   writeJSON = name: attrs: writeText name (builtins.toJSON attrs);
 
+  readJSON = f: builtins.fromJSON (builtins.readFile f);
+
   # Returns `true` if `path` exists.
   # TODO: use `builtins.pathExists` once
   # https://github.com/NixOS/nix/pull/3012 has landed and is generally
